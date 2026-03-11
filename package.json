@@ -1,0 +1,57 @@
+{
+  "name": "@squidlerio/mcp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Squidler MCP proxy - enables testing localhost URLs via local Chrome and CDP proxy",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/squidlerio/mcp.git"
+  },
+  "homepage": "https://github.com/squidlerio/mcp",
+  "bugs": {
+    "url": "https://github.com/squidlerio/mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "bin": {
+    "squidler-mcp": "dist/cli.js",
+    "squidler-mcp-proxy": "dist/mcp-proxy-server.js"
+  },
+  "files": [
+    "dist",
+    "package.json",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "bun build src/cli.ts src/mcp-proxy-server.ts --outdir dist --target node --splitting --packages external",
+    "start": "bun src/cli.ts",
+    "mcp-proxy": "bun src/mcp-proxy-server.ts",
+    "clean": "rm -rf dist"
+  },
+  "keywords": [
+    "squidler",
+    "chrome",
+    "cdp",
+    "testing",
+    "localhost",
+    "mcp",
+    "model-context-protocol"
+  ],
+  "author": "Squidler",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "commander": "^12.1.0",
+    "unzipper": "^0.12.3",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/unzipper": "^0.10.10",
+    "@types/ws": "^8.5.13"
+  }
+}
