@@ -123,8 +123,12 @@ export async function downloadChrome(
     options.version ||
     process.env.SQUIDLER_CHROME_VERSION ||
     DEFAULT_CHROME_VERSION;
-  const cacheDir =
-    options.cacheDir || path.join(os.homedir(), ".squidler", "chrome");
+  const defaultCacheDir = path.join(
+    process.env.XDG_CACHE_HOME || path.join(os.homedir(), ".cache"),
+    "squidler",
+    "chrome",
+  );
+  const cacheDir = options.cacheDir || defaultCacheDir;
   const platform = getPlatform();
 
   // Ensure cache directory exists

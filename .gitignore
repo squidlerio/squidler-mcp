@@ -3,3 +3,8 @@ dist/
 build/
 *.tsbuildinfo
 .DS_Store
+
+# Devenv
+.devenv*
+devenv.local.nix
+

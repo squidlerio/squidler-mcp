@@ -16,6 +16,7 @@ import { VERSION } from "./version.js";
 export interface MCPProxyOptions {
   apiUrl: string;
   apiKey?: string;
+  resolveApiKey?: () => Promise<string>;
 }
 
 interface LocalChromeSettings {
@@ -45,18 +46,33 @@ function deriveCdpProxyUrl(apiUrl: string): string {
 }
 
 export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
-  const { apiUrl, apiKey } = options;
-  const mcpUrl = apiUrl.endsWith("/mcp") ? apiUrl : `${apiUrl}/mcp`;
+  const { apiUrl } = options;
+  const mcpUrl = apiUrl;
   const cdpProxyUrl = deriveCdpProxyUrl(apiUrl);
 
   let localChromeSettings: LocalChromeSettings | null = null;
-  let remoteClient: Client;
+  let remoteClient: Client | null = null;
+  let resolvedApiKey: string | undefined;
+
+  async function getApiKey(): Promise<string> {
+    if (resolvedApiKey) return resolvedApiKey;
+    if (options.apiKey) {
+      resolvedApiKey = options.apiKey;
+    } else if (options.resolveApiKey) {
+      resolvedApiKey = await options.resolveApiKey();
+    } else {
+      throw new Error("No API key configured. Set SQUIDLER_API_KEY or run: squidler-mcp login");
+    }
+    return resolvedApiKey;
+  }
 
   async function connectRemote(): Promise<Client> {
+    const apiKey = await getApiKey();
     const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
       requestInit: {
         headers: {
-          ...(apiKey ? { Authorization: `Bearer ${apiKey}` } : {}),
+          Authorization: `Bearer ${apiKey}`,
+          "X-Squidler-Client": "npm-proxy",
         },
       },
     });
@@ -79,17 +95,25 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
     return client;
   }
 
+  async function ensureRemote(): Promise<Client> {
+    if (!remoteClient) {
+      remoteClient = await connectRemote();
+    }
+    return remoteClient;
+  }
+
   async function withReconnect<T>(
     fn: (client: Client) => Promise<T>,
   ): Promise<T> {
+    const client = await ensureRemote();
     try {
-      return await fn(remoteClient);
+      return await fn(client);
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes("Session not found") || msg.includes("fetch failed")) {
         console.error(`Remote session lost (${msg}), reconnecting...`);
         try {
-          await remoteClient.close();
+          await client.close();
         } catch {}
         remoteClient = await connectRemote();
         return await fn(remoteClient);
@@ -121,8 +145,6 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
       }),
     );
   }
-
-  remoteClient = await connectRemote();
 
   const localServer = new Server(
     { name: "squidler", version: VERSION },
@@ -259,14 +281,14 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
   process.on("SIGINT", async () => {
     await stopSession();
     await localServer.close();
-    await remoteClient.close();
+    await remoteClient?.close();
     process.exit(0);
   });
 
   process.on("SIGTERM", async () => {
     await stopSession();
     await localServer.close();
-    await remoteClient.close();
+    await remoteClient?.close();
     process.exit(0);
   });
 }
