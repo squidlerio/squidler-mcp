@@ -137,7 +137,16 @@ export async function authenticateWithOAuth(serverUrl: string): Promise<string> 
     authUrl.searchParams.set("code_challenge", pkce.challenge);
     authUrl.searchParams.set("code_challenge_method", "S256");
 
-    const opened = openBrowser(authUrl.toString());
+    // Open the onboarding page instead of the OAuth endpoint directly
+    const connectUrl = new URL("/mcp/connect", new URL(metadata.authorization_endpoint).origin);
+    connectUrl.searchParams.set("response_type", "code");
+    connectUrl.searchParams.set("client_id", client.client_id);
+    connectUrl.searchParams.set("redirect_uri", redirectUri);
+    connectUrl.searchParams.set("state", state);
+    connectUrl.searchParams.set("code_challenge", pkce.challenge);
+    connectUrl.searchParams.set("code_challenge_method", "S256");
+
+    const opened = openBrowser(connectUrl.toString());
     if (opened) {
       console.error("Browser opened for authentication. Waiting...");
     } else {
