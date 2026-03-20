@@ -1,4 +1,4 @@
-# @squidlerio/mcp
+# @squidlerio/squidler-mcp
 
 MCP proxy that sits between an AI client (Claude, Cursor, etc.) and the remote Squidler MCP server. It forwards all tools, resources, and prompts transparently, while adding local Chrome session management for testing localhost URLs.
 
@@ -17,7 +17,7 @@ The proxy intercepts `test_case_run` calls — when local Chrome mode is enabled
 Run directly with npx — no install or API key needed:
 
 ```bash
-npx @squidlerio/mcp
+npx @squidlerio/squidler-mcp
 ```
 
 On first use, a browser window opens for you to sign in to Squidler. Your session is saved locally so you only need to do this once.
@@ -25,7 +25,7 @@ On first use, a browser window opens for you to sign in to Squidler. Your sessio
 ### Claude Code
 
 ```bash
-claude mcp add squidler -- npx -y @squidlerio/mcp
+claude mcp add squidler -- npx -y @squidlerio/squidler-mcp
 ```
 
 ### Cursor / Other MCP Clients
@@ -37,7 +37,7 @@ Add to your MCP client configuration:
   "mcpServers": {
     "squidler": {
       "command": "npx",
-      "args": ["-y", "@squidlerio/mcp"]
+      "args": ["-y", "@squidlerio/squidler-mcp"]
     }
   }
 }
@@ -75,7 +75,7 @@ If you prefer to use an API key instead of OAuth login, set the `SQUIDLER_API_KE
   "mcpServers": {
     "squidler": {
       "command": "npx",
-      "args": ["-y", "@squidlerio/mcp"],
+      "args": ["-y", "@squidlerio/squidler-mcp"],
       "env": {
         "SQUIDLER_API_KEY": "your-api-key"
       }
