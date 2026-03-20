@@ -3,6 +3,11 @@
 import { Command } from "commander";
 import { downloadChrome } from "./chrome/download.js";
 import { VERSION } from "./version.js";
+import { clearStoredAuth } from "./auth/token-store.js";
+import { authenticateWithOAuth } from "./auth/oauth.js";
+
+const SQUIDLER_API_URL =
+  process.env.SQUIDLER_API_URL || "https://mcp.squidler.io";
 
 const program = new Command();
 
@@ -40,6 +45,27 @@ program
   )
   .action(async () => {
     await import("./mcp-proxy-server.js");
+  });
+
+program
+  .command("login")
+  .description("Authenticate with Squidler via browser-based OAuth")
+  .action(async () => {
+    try {
+      await authenticateWithOAuth(SQUIDLER_API_URL);
+      console.error("Authentication successful! Token stored.");
+    } catch (error) {
+      console.error("Authentication failed:", error);
+      process.exit(1);
+    }
+  });
+
+program
+  .command("logout")
+  .description("Clear stored authentication credentials")
+  .action(() => {
+    clearStoredAuth(SQUIDLER_API_URL);
+    console.error("Stored credentials cleared.");
   });
 
 program.parse();

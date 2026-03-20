@@ -1,20 +1,33 @@
 #!/usr/bin/env node
 
+import { setMaxListeners } from "events";
+setMaxListeners(0);
+
 import { startMCPProxy } from "./mcp-proxy.js";
+import { loadStoredAuth } from "./auth/token-store.js";
+import { authenticateWithOAuth } from "./auth/oauth.js";
 
 const SQUIDLER_API_URL =
   process.env.SQUIDLER_API_URL || "https://mcp.squidler.io";
-const SQUIDLER_API_KEY = process.env.SQUIDLER_API_KEY;
 
 async function main() {
-  if (!SQUIDLER_API_KEY) {
-    console.error("SQUIDLER_API_KEY environment variable is required");
-    process.exit(1);
-  }
-
   await startMCPProxy({
     apiUrl: SQUIDLER_API_URL,
-    apiKey: SQUIDLER_API_KEY,
+    resolveApiKey: async () => {
+      const envKey = process.env.SQUIDLER_API_KEY;
+      if (envKey) return envKey;
+
+      const stored = loadStoredAuth(SQUIDLER_API_URL);
+      if (stored) {
+        console.error("Using stored authentication token");
+        return stored.access_token;
+      }
+
+      console.error("No API key found. Starting browser authentication...");
+      const token = await authenticateWithOAuth(SQUIDLER_API_URL);
+      console.error("Authentication successful!");
+      return token;
+    },
   });
 }
 

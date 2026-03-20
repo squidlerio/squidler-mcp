@@ -12,26 +12,63 @@ AI Client (stdio) ←→ MCP Proxy ←→ Remote Squidler MCP (HTTP)
 
 The proxy intercepts `test_case_run` calls — when local Chrome mode is enabled, it automatically creates a CDP session and routes the test through your local browser instead of the cloud worker's Chrome.
 
-## Install
+## Quick Start
+
+Run directly with npx — no install or API key needed:
 
 ```bash
-npm install -g @squidlerio/mcp
+npx @squidlerio/mcp
 ```
 
-## Configuration
+On first use, a browser window opens for you to sign in to Squidler. Your session is saved locally so you only need to do this once.
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `SQUIDLER_API_KEY` | Yes | — | API key for the remote Squidler MCP server |
-| `SQUIDLER_API_URL` | No | `https://mcp.squidler.io` | Remote MCP server URL |
+### Claude Code
 
-The CDP proxy URL is derived automatically from the API URL.
+```bash
+claude mcp add squidler -- npx -y @squidlerio/mcp
+```
 
-## Usage
-
-### As an MCP server (stdio)
+### Cursor / Other MCP Clients
 
 Add to your MCP client configuration:
+
+```json
+{
+  "mcpServers": {
+    "squidler": {
+      "command": "npx",
+      "args": ["-y", "@squidlerio/mcp"]
+    }
+  }
+}
+```
+
+## CLI Commands
+
+```bash
+# Sign in to Squidler (happens automatically on first use)
+squidler-mcp login
+
+# Sign out and clear saved session
+squidler-mcp logout
+
+# Download Chrome headless shell for local testing
+squidler-mcp download-chrome
+```
+
+## Local Session Tools
+
+These tools are added by the proxy (not available on the remote server):
+
+- **`local_session_start`** — Enable local Chrome mode. Accepts `headless` (boolean, default: true). Chrome is launched on the first `test_case_run`.
+- **`local_session_stop`** — Disable local Chrome mode and stop any active session.
+- **`local_session_status`** — Check if local Chrome mode is enabled and if a session is active.
+
+When local Chrome mode is enabled, `test_case_run` automatically creates/recycles a CDP session and routes through your local Chrome. Back-to-back tests get a fresh Chrome instance each time.
+
+## Advanced: API Key Override
+
+If you prefer to use an API key instead of OAuth login, set the `SQUIDLER_API_KEY` environment variable:
 
 ```json
 {
@@ -47,25 +84,10 @@ Add to your MCP client configuration:
 }
 ```
 
-### CLI
-
-```bash
-# Download Chrome headless shell for local testing
-squidler-mcp download-chrome
-
-# Start MCP proxy via CLI
-squidler-mcp mcp-proxy
-```
-
-## Local session tools
-
-These tools are added by the proxy (not available on the remote server):
-
-- **`local_session_start`** — Enable local Chrome mode. Accepts `headless` (boolean, default: true). Chrome is launched on the first `test_case_run`.
-- **`local_session_stop`** — Disable local Chrome mode and stop any active session.
-- **`local_session_status`** — Check if local Chrome mode is enabled and if a session is active.
-
-When local Chrome mode is enabled, `test_case_run` automatically creates/recycles a CDP session and routes through your local Chrome. Back-to-back tests get a fresh Chrome instance each time.
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SQUIDLER_API_KEY` | No | — | API key override (skips OAuth login) |
+| `SQUIDLER_API_URL` | No | `https://mcp.squidler.io` | Remote MCP server URL |
 
 ## Development
 
