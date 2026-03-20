@@ -8,3 +8,5 @@ build/
 .devenv*
 devenv.local.nix
 
+# NPM packages
+*.tgz
