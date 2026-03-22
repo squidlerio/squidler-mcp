@@ -68,4 +68,9 @@ program
     console.error("Stored credentials cleared.");
   });
 
+// Default to mcp-proxy when no subcommand is given (e.g. `npx @squidlerio/squidler-mcp`)
+if (process.argv.length <= 2) {
+  process.argv.push("mcp-proxy");
+}
+
 program.parse();

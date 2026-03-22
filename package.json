@@ -1,6 +1,6 @@
 {
   "name": "@squidlerio/squidler-mcp",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "type": "module",
   "description": "Squidler MCP proxy - enables testing localhost URLs via local Chrome and CDP proxy",
   "repository": {
