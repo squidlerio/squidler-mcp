@@ -73,7 +73,14 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
         headers: {
           Authorization: `Bearer ${apiKey}`,
           "X-Squidler-Client": "npm-proxy",
+          "User-Agent": `squidler-mcp/${VERSION}`,
         },
+      },
+      reconnectionOptions: {
+        maxRetries: 0,
+        initialReconnectionDelay: 30000,
+        maxReconnectionDelay: 60000,
+        reconnectionDelayGrowFactor: 2,
       },
     });
 
@@ -231,7 +238,9 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
         );
       }
 
-      case "test_case_run": {
+      case "test_case_run":
+      case "test_cases_run_all":
+      case "test_cases_run_by_label": {
         if (localChromeSettings) {
           return await runWithLocalChrome(request);
         }
