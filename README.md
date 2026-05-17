@@ -10,7 +10,7 @@ AI Client (stdio) ←→ MCP Proxy ←→ Remote Squidler MCP (HTTP)
                    Local Chrome ←→ CDP Proxy (WebSocket)
 ```
 
-The proxy intercepts `test_case_run` calls — when local Chrome mode is enabled, it automatically creates a CDP session and routes the test through your local browser instead of the cloud worker's Chrome.
+The proxy intercepts `test_case_run` and `test_case_run_standalone` calls — when local Chrome mode is enabled, it automatically creates a CDP session and routes the test through your local browser instead of the cloud worker's Chrome. Same handling applies to `test_cases_run_all` and `test_cases_run_by_label`.
 
 ## Quick Start
 
@@ -60,11 +60,11 @@ squidler-mcp download-chrome
 
 These tools are added by the proxy (not available on the remote server):
 
-- **`local_session_start`** — Enable local Chrome mode. Accepts `headless` (boolean, default: true). Chrome is launched on the first `test_case_run`.
+- **`local_session_start`** — Enable local Chrome mode. Accepts `headless` (boolean, default: true). Chrome is launched on the first test-running tool call.
 - **`local_session_stop`** — Disable local Chrome mode and stop any active session.
 - **`local_session_status`** — Check if local Chrome mode is enabled and if a session is active.
 
-When local Chrome mode is enabled, `test_case_run` automatically creates/recycles a CDP session and routes through your local Chrome. Back-to-back tests get a fresh Chrome instance each time.
+When local Chrome mode is enabled, the test-running tools — `test_case_run`, `test_case_run_standalone`, `test_cases_run_all`, `test_cases_run_by_label` — automatically create/recycle a CDP session and route through your local Chrome. Back-to-back tests get a fresh Chrome instance each time.
 
 ## Advanced: API Key Override
 
