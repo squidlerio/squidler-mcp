@@ -1,11 +1,11 @@
 {
   "name": "@squidlerio/squidler-mcp",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "module",
   "description": "Squidler MCP proxy - enables testing localhost URLs via local Chrome and CDP proxy",
   "repository": {
     "type": "git",
-    "url": "https://github.com/squidlerio/mcp.git"
+    "url": "git+https://github.com/squidlerio/mcp.git"
   },
   "homepage": "https://github.com/squidlerio/mcp",
   "bugs": {

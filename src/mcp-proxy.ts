@@ -241,7 +241,8 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
       case "test_case_run":
       case "test_case_run_standalone":
       case "test_cases_run_all":
-      case "test_cases_run_by_label": {
+      case "test_cases_run_by_label":
+      case "persona_review_run": {
         if (localChromeSettings) {
           return await runWithLocalChrome(request);
         }
