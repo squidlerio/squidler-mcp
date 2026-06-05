@@ -52,16 +52,28 @@ function generatePKCE(): { verifier: string; challenge: string } {
 function openBrowser(url: string): boolean {
   const platform = os.platform();
 
+  if (platform === "win32") {
+    // cmd.exe re-parses its full command line, treating unquoted `&` as a
+    // command separator — which truncates OAuth URLs at the first query
+    // parameter. Pass the command line verbatim with the URL quoted so cmd
+    // receives it intact. The empty "" is the window title `start` expects
+    // when its first argument is quoted.
+    const result = spawnSync("cmd.exe", ["/c", `start "" "${url}"`], {
+      stdio: "ignore",
+      timeout: 5000,
+      windowsVerbatimArguments: true,
+    });
+    return !result.error && result.status === 0;
+  }
+
   const commands: [string, string[]][] =
     platform === "darwin"
       ? [["open", [url]]]
-      : platform === "win32"
-        ? [["cmd", ["/c", "start", "", url]]]
-        : [
-            ["xdg-open", [url]],
-            ["sensible-browser", [url]],
-            ["x-www-browser", [url]],
-          ];
+      : [
+          ["xdg-open", [url]],
+          ["sensible-browser", [url]],
+          ["x-www-browser", [url]],
+        ];
 
   for (const [cmd, args] of commands) {
     const result = spawnSync(cmd, args, { stdio: "ignore", timeout: 5000 });
