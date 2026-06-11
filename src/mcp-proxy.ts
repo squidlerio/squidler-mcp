@@ -1,5 +1,8 @@
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import {
+  StreamableHTTPClientTransport,
+  StreamableHTTPError,
+} from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import {
@@ -11,12 +14,12 @@ import {
   GetPromptRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import { getActiveSession, startSession, stopSession } from "./cdp/session.js";
+import { AuthProvider } from "./auth/auth-provider.js";
 import { VERSION } from "./version.js";
 
 export interface MCPProxyOptions {
   apiUrl: string;
-  apiKey?: string;
-  resolveApiKey?: () => Promise<string>;
+  auth: AuthProvider;
 }
 
 interface LocalChromeSettings {
@@ -28,6 +31,13 @@ function toolResult(text: string, isError?: boolean) {
     content: [{ type: "text" as const, text }],
     ...(isError ? { isError: true } : {}),
   };
+}
+
+/** A 401 from the MCP endpoint means the bearer token expired or was revoked. */
+function is401(error: unknown): boolean {
+  if (error instanceof StreamableHTTPError && error.code === 401) return true;
+  const msg = error instanceof Error ? error.message : String(error);
+  return msg.includes("401") || /\bunauthorized\b/i.test(msg);
 }
 
 function deriveCdpProxyUrl(apiUrl: string): string {
@@ -52,22 +62,12 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
 
   let localChromeSettings: LocalChromeSettings | null = null;
   let remoteClient: Client | null = null;
-  let resolvedApiKey: string | undefined;
-
-  async function getApiKey(): Promise<string> {
-    if (resolvedApiKey) return resolvedApiKey;
-    if (options.apiKey) {
-      resolvedApiKey = options.apiKey;
-    } else if (options.resolveApiKey) {
-      resolvedApiKey = await options.resolveApiKey();
-    } else {
-      throw new Error("No API key configured. Set SQUIDLER_API_KEY or run: squidler-mcp login");
-    }
-    return resolvedApiKey;
-  }
 
   async function connectRemote(): Promise<Client> {
-    const apiKey = await getApiKey();
+    // Fetch the token on every (re)connect so it reflects any proactive refresh — the
+    // header is baked into the transport, so a stale connection keeps replaying an old
+    // token until we rebuild it.
+    const apiKey = await options.auth.getToken();
     const transport = new StreamableHTTPClientTransport(new URL(mcpUrl), {
       requestInit: {
         headers: {
@@ -109,21 +109,35 @@ export async function startMCPProxy(options: MCPProxyOptions): Promise<void> {
     return remoteClient;
   }
 
+  async function resetRemote(): Promise<void> {
+    if (remoteClient) {
+      try {
+        await remoteClient.close();
+      } catch {}
+      remoteClient = null;
+    }
+  }
+
   async function withReconnect<T>(
     fn: (client: Client) => Promise<T>,
   ): Promise<T> {
-    const client = await ensureRemote();
     try {
-      return await fn(client);
+      return await fn(await ensureRemote());
     } catch (error) {
+      // 401 → the token expired or was revoked. Re-authorize (refresh, else browser flow),
+      // rebuild the connection with the new token, and retry exactly once. If the retry 401s
+      // again the error propagates — we never loop on a dead token, which was the original bug.
+      if (is401(error)) {
+        console.error("Remote returned 401 (token expired/invalid), re-authorizing...");
+        await options.auth.reauthorize();
+        await resetRemote();
+        return await fn(await ensureRemote());
+      }
       const msg = error instanceof Error ? error.message : String(error);
       if (msg.includes("Session not found") || msg.includes("fetch failed")) {
         console.error(`Remote session lost (${msg}), reconnecting...`);
-        try {
-          await client.close();
-        } catch {}
-        remoteClient = await connectRemote();
-        return await fn(remoteClient);
+        await resetRemote();
+        return await fn(await ensureRemote());
       }
       throw error;
     }

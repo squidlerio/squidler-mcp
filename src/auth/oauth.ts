@@ -2,12 +2,48 @@ import * as crypto from "crypto";
 import * as os from "os";
 import { spawnSync } from "child_process";
 import { startCallbackServer } from "./callback-server.js";
-import { saveStoredAuth } from "./token-store.js";
+import { saveStoredAuth, StoredAuth } from "./token-store.js";
 
 interface OAuthServerMetadata {
   authorization_endpoint: string;
   token_endpoint: string;
   registration_endpoint: string;
+}
+
+interface TokenResponse {
+  access_token: string;
+  refresh_token?: string;
+  expires_in?: number;
+}
+
+/**
+ * Build a StoredAuth from a token response and persist it before returning. Called for both
+ * the initial authorization_code exchange and every refresh. On refresh the server rotates
+ * (and revokes) the old pair, so the write must happen the instant the response arrives —
+ * hence callers must not use the returned token before this resolves. `prev` supplies the
+ * carry-over refresh_token/expires_at if the server ever omits them from a response.
+ */
+function persistTokenResponse(
+  serverUrl: string,
+  client: { client_id: string; client_secret?: string },
+  data: TokenResponse,
+  prev?: StoredAuth,
+): StoredAuth {
+  const nowMs = Date.now();
+  const auth: StoredAuth = {
+    access_token: data.access_token,
+    refresh_token: data.refresh_token ?? prev?.refresh_token,
+    expires_at:
+      data.expires_in !== undefined
+        ? new Date(nowMs + data.expires_in * 1000).toISOString()
+        : prev?.expires_at,
+    client_id: client.client_id,
+    client_secret: client.client_secret || undefined,
+    server_url: serverUrl,
+    created_at: new Date(nowMs).toISOString(),
+  };
+  saveStoredAuth(auth);
+  return auth;
 }
 
 async function discover(serverUrl: string): Promise<OAuthServerMetadata> {
@@ -32,7 +68,7 @@ async function registerClient(
     body: JSON.stringify({
       client_name: "squidler-mcp-cli",
       redirect_uris: [redirectUri],
-      grant_types: ["authorization_code"],
+      grant_types: ["authorization_code", "refresh_token"],
       response_types: ["code"],
       token_endpoint_auth_method: "client_secret_post",
     }),
@@ -94,7 +130,7 @@ async function exchangeToken(
     clientSecret: string;
     codeVerifier: string;
   },
-): Promise<string> {
+): Promise<TokenResponse> {
   const body = new URLSearchParams({
     grant_type: "authorization_code",
     code: params.code,
@@ -115,11 +151,60 @@ async function exchangeToken(
     throw new Error(`Token exchange failed: HTTP ${res.status} - ${text}`);
   }
 
-  const data = (await res.json()) as { access_token: string };
+  const data = (await res.json()) as TokenResponse;
   if (!data.access_token) {
     throw new Error("Token response missing access_token");
   }
-  return data.access_token;
+  return data;
+}
+
+/**
+ * Exchange a stored refresh token for a fresh access/refresh pair via the refresh_token grant,
+ * persisting the rotated pair immediately. Throws if the stored record lacks the credentials
+ * needed to refresh, or if the server rejects the refresh token (expired/revoked) — callers
+ * fall back to the browser flow on that error.
+ */
+export async function refreshAccessToken(
+  serverUrl: string,
+  stored: StoredAuth,
+): Promise<StoredAuth> {
+  if (!stored.refresh_token || !stored.client_id) {
+    throw new Error("Stored credentials have no refresh_token/client_id to refresh with");
+  }
+
+  const metadata = await discover(serverUrl);
+
+  const body = new URLSearchParams({
+    grant_type: "refresh_token",
+    refresh_token: stored.refresh_token,
+    client_id: stored.client_id,
+  });
+  if (stored.client_secret) {
+    body.set("client_secret", stored.client_secret);
+  }
+
+  const res = await fetch(metadata.token_endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: body.toString(),
+  });
+
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Token refresh failed: HTTP ${res.status} - ${text}`);
+  }
+
+  const data = (await res.json()) as TokenResponse;
+  if (!data.access_token) {
+    throw new Error("Refresh response missing access_token");
+  }
+
+  return persistTokenResponse(
+    serverUrl,
+    { client_id: stored.client_id, client_secret: stored.client_secret },
+    data,
+    stored,
+  );
 }
 
 export async function authenticateWithOAuth(serverUrl: string): Promise<string> {
@@ -175,7 +260,7 @@ export async function authenticateWithOAuth(serverUrl: string): Promise<string> 
 
     // 7. Token exchange
     console.error("Exchanging authorization code for token...");
-    const accessToken = await exchangeToken(metadata.token_endpoint, {
+    const tokenResponse = await exchangeToken(metadata.token_endpoint, {
       code: result.code,
       redirectUri,
       clientId: client.client_id,
@@ -183,14 +268,11 @@ export async function authenticateWithOAuth(serverUrl: string): Promise<string> 
       codeVerifier: pkce.verifier,
     });
 
-    // 8. Save token
-    saveStoredAuth({
-      access_token: accessToken,
-      server_url: serverUrl,
-      created_at: new Date().toISOString(),
-    });
+    // 8. Persist the full token state (including the DCR client creds + refresh token) so
+    // later sessions can refresh without a new browser flow.
+    persistTokenResponse(serverUrl, client, tokenResponse);
 
-    return accessToken;
+    return tokenResponse.access_token;
   } finally {
     callback.close();
   }
